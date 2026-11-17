@@ -3,11 +3,11 @@ class PlayerMovement extends pc.ScriptType {
     speed: IStat;
     input: IInput;
     baseValueSpeed: number;
+    movementType: number;
     direction: pc.Vec3;
 
     initialize() {
-        // this.movement = new PhysicsMovement(this.entity) as IMovement;
-        this.movement = new TransformMovement(this.entity) as IMovement;
+        this.movement = this.movementType === 1 ? new PhysicsMovement(this.entity) : new TransformMovement(this.entity);
         this.speed = new Stat(this.baseValueSpeed) as IStat;
         this.input = new InputKeyboard(this.app);
         this.direction = new pc.Vec3();
@@ -51,3 +51,12 @@ PlayerMovement.attributes.add("baseValueSpeed", {
     precision: 2,
     description: "Control the speed movement of entity"
 });
+
+PlayerMovement.attributes.add("movementType", {                                                             
+    type: 'number',                                                                                         
+    default: 0,                                                                                             
+    enum: [                                                                                                 
+        { 'Transform': 0 },                                                                                 
+        { 'Physics': 1 }                                                                                    
+    ]                                                                                                       
+});  
