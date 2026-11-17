@@ -1,47 +1,31 @@
 class PlayerMovement extends pc.ScriptType {
     movement: IMovement;
     speed: IStat;
-    baseValueSpeed: number
+    input: IInput;
+    baseValueSpeed: number;
     direction: pc.Vec3;
 
     initialize() {
         // this.movement = new PhysicsMovement(this.entity) as IMovement;
         this.movement = new TransformMovement(this.entity) as IMovement;
         this.speed = new Stat(this.baseValueSpeed) as IStat;
-        this.direction = new pc.Vec3;
+        this.input = new InputKeyboard(this.app);
+        this.direction = new pc.Vec3();
+
+        this.on('destroy', () => {
+            this.input.destroy();
+        });
     }
 
     update(dt: number) {
-        const keyboard = this.app.keyboard;
-        if (!keyboard) return;
-
         const moveSpeed = this.speed.value;
-        let forceX = 0;
-        let forceZ = 0;
 
-        // Calculate force based on pressed keys
-        if (keyboard.isPressed(pc.KEY_LEFT) || keyboard.isPressed(pc.KEY_A)) {
-            forceX = -moveSpeed;
-        }
+        // Ambil input arah dari sistem input
+        this.direction.copy(this.input.value);
 
-        if (keyboard.isPressed(pc.KEY_RIGHT) || keyboard.isPressed(pc.KEY_D)) {
-            forceX += moveSpeed;
-        }
-
-        if (keyboard.isPressed(pc.KEY_UP) || keyboard.isPressed(pc.KEY_W)) {
-            forceZ = -moveSpeed;
-        }
-
-        if (keyboard.isPressed(pc.KEY_DOWN) || keyboard.isPressed(pc.KEY_S)) {
-            forceZ += moveSpeed;
-        }
-
-        this.direction.set(forceX, 0, forceZ);
-
-        // If we have some non-zero force
+        // Jika ada input arah
         if (this.direction.lengthSq() > 0) {
-            // Normalize the force vector
-            this.direction.normalize().mulScalar(moveSpeed);
+            this.direction.mulScalar(moveSpeed);
 
             // Apply rotation to the force vector (45 degrees isometric angle)
             const angle = -Math.PI * 0.25;  // 45 degrees in radians
@@ -53,7 +37,7 @@ class PlayerMovement extends pc.ScriptType {
             this.direction.set(rotatedX, 0, rotatedZ);
         }
 
-        this.movement.doMove(this.direction);
+        this.movement.doMove(this.direction, dt);
     }
 }
 

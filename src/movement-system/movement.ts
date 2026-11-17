@@ -1,5 +1,5 @@
 interface IMovement {
-    doMove(direction: pc.Vec3): void;
+    doMove(direction: pc.Vec3, dt?: number): void;
 }
 
 abstract class Movement implements IMovement {
@@ -9,5 +9,5 @@ abstract class Movement implements IMovement {
         this.entity = targetEntity;
     }
 
-    abstract doMove(direction: pc.Vec3): void;
+    abstract doMove(direction: pc.Vec3, dt?: number): void;
 }

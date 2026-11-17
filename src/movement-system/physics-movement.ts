@@ -5,5 +5,6 @@ class PhysicsMovement extends Movement {
 
     doMove(direction: pc.Vec3): void {
         this.entity.rigidbody?.applyImpulse(direction);
+        console.log(this.entity.rigidbody?.linearVelocity);
     }
 }
