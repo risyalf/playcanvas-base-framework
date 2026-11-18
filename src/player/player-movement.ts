@@ -58,13 +58,6 @@ class PlayerMovement extends pc.ScriptType {
 
         this.entity.collision?.on('collisionstart', this.onCollisionStart, this);
         this.entity.collision?.on('collisionend', this.onCollisionEnd, this);
-
-        this.entity.collision?.on(
-            'triggerenter',
-            (other: pc.Entity) => {
-                console.log('TRIGGER:', other.name);
-            }
-        );
     }
 
     update(dt: number) {
@@ -221,14 +214,12 @@ class PlayerMovement extends pc.ScriptType {
     }
 
     onCollisionStart = function (result: pc.ContactResult) {
-        console.log('Collision detected!');
-        console.log('Object:', result.other.name);
+        
     };
 
     onCollisionEnd = function (result: pc.ContactResult) {
-        console.log('Collision ended!');
-        console.log('Object:', result.other.name);
-    };
+        
+    }; 
 
     destroy() {
         this.entity.collision?.off(
@@ -241,13 +232,6 @@ class PlayerMovement extends pc.ScriptType {
             'collisionend',
             this.onCollisionEnd,
             this
-        );
-
-        this.entity.collision?.off(
-            'triggerenter',
-            (other: pc.Entity) => {
-                console.log('TRIGGER:', other.name);
-            }
         );
 
         console.log('Player destroyed');
