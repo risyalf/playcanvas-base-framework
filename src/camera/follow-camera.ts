@@ -7,6 +7,7 @@ class FollowCamera extends pc.ScriptType {
     pitchMax: number;
     focusHeight: number;
     sensitivity: number;
+    touchSensitivity: number;
     smoothSpeed: number;
     pointerLockOnClick: boolean;
 
@@ -53,8 +54,19 @@ class FollowCamera extends pc.ScriptType {
         // Dukungan Pointer Lock (seperti di game PC/Genshin Impact)
         document.addEventListener('pointerlockchange', this.onPointerLockChange);
 
-        if (this.pointerLockOnClick && this.app.graphicsDevice.canvas) {
-            this.app.graphicsDevice.canvas.addEventListener('click', this.onCanvasClick);
+        const canvas = this.app.graphicsDevice.canvas;
+        if (canvas) {
+            // Mencegah scroll dan pull-to-refresh browser agar touch kamera tidak terinterupsi
+            canvas.style.touchAction = 'none';
+        }
+
+        if (this.pointerLockOnClick && canvas) {
+            canvas.addEventListener('click', this.onCanvasClick);
+        }
+
+        // Pastikan TouchDevice terhubung (khususnya saat mode emulator F12 di browser desktop)
+        if (!this.app.touch && canvas && (window.TouchEvent || 'ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+            this.app.touch = new pc.TouchDevice(canvas);
         }
 
         // Touch support untuk layar sentuh / mobile
@@ -62,6 +74,7 @@ class FollowCamera extends pc.ScriptType {
             this.app.touch.on(pc.EVENT_TOUCHSTART, this.onTouchStart, this);
             this.app.touch.on(pc.EVENT_TOUCHMOVE, this.onTouchMove, this);
             this.app.touch.on(pc.EVENT_TOUCHEND, this.onTouchEnd, this);
+            this.app.touch.on(pc.EVENT_TOUCHCANCEL, this.onTouchEnd, this);
         }
 
         this.on('destroy', () => {
@@ -71,9 +84,15 @@ class FollowCamera extends pc.ScriptType {
                 this.app.mouse.off(pc.EVENT_MOUSEMOVE, this.onMouseMove, this);
                 this.app.mouse.off(pc.EVENT_MOUSEWHEEL, this.onMouseWheel, this);
             }
+            if (this.app.touch) {
+                this.app.touch.off(pc.EVENT_TOUCHSTART, this.onTouchStart, this);
+                this.app.touch.off(pc.EVENT_TOUCHMOVE, this.onTouchMove, this);
+                this.app.touch.off(pc.EVENT_TOUCHEND, this.onTouchEnd, this);
+                this.app.touch.off(pc.EVENT_TOUCHCANCEL, this.onTouchEnd, this);
+            }
             document.removeEventListener('pointerlockchange', this.onPointerLockChange);
-            if (this.app.graphicsDevice.canvas) {
-                this.app.graphicsDevice.canvas.removeEventListener('click', this.onCanvasClick);
+            if (canvas) {
+                canvas.removeEventListener('click', this.onCanvasClick);
             }
         });
     }
@@ -118,31 +137,65 @@ class FollowCamera extends pc.ScriptType {
 
     private touchStartX = 0;
     private touchStartY = 0;
+    private lastPinchDistance = 0;
+    private isTouching = false;
 
     private onTouchStart(event: pc.TouchEvent) {
+        event.event?.preventDefault?.();
+
         if (event.touches.length === 1) {
             this.touchStartX = event.touches[0].x;
             this.touchStartY = event.touches[0].y;
-            this.isMouseDown = true;
+            this.isTouching = true;
+        } else if (event.touches.length === 2) {
+            // Persiapan Pinch-to-zoom (2 jari)
+            this.isTouching = false;
+            const dx = event.touches[0].x - event.touches[1].x;
+            const dy = event.touches[0].y - event.touches[1].y;
+            this.lastPinchDistance = Math.sqrt(dx * dx + dy * dy);
         }
     }
 
     private onTouchMove(event: pc.TouchEvent) {
-        if (event.touches.length === 1 && this.isMouseDown) {
+        event.event?.preventDefault?.();
+
+        if (event.touches.length === 1 && this.isTouching) {
+            // Rotasi kamera (1 jari)
             const touch = event.touches[0];
             const dx = touch.x - this.touchStartX;
             const dy = touch.y - this.touchStartY;
             this.touchStartX = touch.x;
             this.touchStartY = touch.y;
 
-            this.targetYaw -= dx * this.sensitivity;
-            this.targetPitch += dy * this.sensitivity;
+            const touchSens = this.touchSensitivity || (this.sensitivity * 1.5) || 0.3;
+            this.targetYaw -= dx * touchSens;
+            this.targetPitch += dy * touchSens;
             this.targetPitch = pc.math.clamp(this.targetPitch, this.pitchMin, this.pitchMax);
+        } else if (event.touches.length === 2) {
+            // Zoom kamera dengan 2 jari (Pinch to Zoom)
+            const dx = event.touches[0].x - event.touches[1].x;
+            const dy = event.touches[0].y - event.touches[1].y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (this.lastPinchDistance > 0) {
+                const pinchDelta = distance - this.lastPinchDistance;
+                this.targetDistance -= pinchDelta * 0.015;
+                this.targetDistance = pc.math.clamp(this.targetDistance, this.minDistance, this.maxDistance);
+            }
+            this.lastPinchDistance = distance;
         }
     }
 
-    private onTouchEnd() {
-        this.isMouseDown = false;
+    private onTouchEnd(event: pc.TouchEvent) {
+        if (event.touches.length === 1) {
+            // Jika melepas 1 jari dari 2 jari, lanjut rotasi mulus tanpa melompat
+            this.touchStartX = event.touches[0].x;
+            this.touchStartY = event.touches[0].y;
+            this.isTouching = true;
+        } else if (event.touches.length === 0) {
+            this.isTouching = false;
+            this.lastPinchDistance = 0;
+        }
     }
 
     postUpdate(dt: number) {
@@ -239,6 +292,16 @@ FollowCamera.attributes.add("sensitivity", {
     precision: 2,
     title: 'Sensitivity',
     description: 'Sensitivitas putaran mouse'
+});
+
+FollowCamera.attributes.add("touchSensitivity", {
+    type: 'number',
+    default: 0.35,
+    min: 0.05,
+    max: 2,
+    precision: 2,
+    title: 'Touch Sensitivity',
+    description: 'Sensitivitas putaran kamera saat digeser menggunakan sentuhan jari (Mobile)'
 });
 
 FollowCamera.attributes.add("smoothSpeed", {

@@ -3,7 +3,7 @@ class Coba extends pc.ScriptType {
 
     update() {
         // console.log(this.targetEntity.getPosition().distance(this.entity.getPosition()));
-        this.entity.lookAt(this.targetEntity.getPosition());
+        // this.entity.lookAt(this.targetEntity.getPosition());
     }
 }
 

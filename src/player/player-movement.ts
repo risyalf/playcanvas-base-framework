@@ -25,9 +25,24 @@ class PlayerMovement extends pc.ScriptType {
     private currentAnim: string;
 
     initialize() {
-        this.movement = this.movementType === 1 ? new PhysicsMovement(this.entity) : new TransformMovement(this.entity);
+        // Otomatis cari kamera di scene jika belum di-assign
+        if (!this.cameraEntity) {
+            this.cameraEntity = this.app.root.findByName('Camera') as pc.Entity;
+            if (!this.cameraEntity && (this.app.systems as any).camera?.cameras?.[0]) {
+                this.cameraEntity = (this.app.systems as any).camera.cameras[0].entity;
+            }
+        }
+
+        // Inisialisasi Input & Movement berdasarkan controlMode
+        if (this.controlMode === 3) {
+            this.input = new ClickInput(this.app, this.cameraEntity, this.entity);
+            this.movement = new ClickMovement(this.entity);
+        } else {
+            this.input = new InputKeyboard(this.app);
+            this.movement = this.movementType === 1 ? new PhysicsMovement(this.entity) : new TransformMovement(this.entity);
+        }
+
         this.speed = new Stat(this.baseValueSpeed) as IStat;
-        this.input = new InputKeyboard(this.app);
         this.direction = new pc.Vec3();
 
         this.currentRotation = new pc.Quat();
@@ -37,14 +52,6 @@ class PlayerMovement extends pc.ScriptType {
         this.camRight = new pc.Vec3();
         this.currentAnim = '';
 
-        // Otomatis cari kamera di scene jika belum di-assign
-        if (!this.cameraEntity) {
-            this.cameraEntity = this.app.root.findByName('Camera') as pc.Entity;
-            if (!this.cameraEntity && (this.app.systems as any).camera?.cameras?.[0]) {
-                this.cameraEntity = (this.app.systems as any).camera.cameras[0].entity;
-            }
-        }
-
         // Inisialisasi animasi default (Idle) jika menggunakan komponen Animation legacy
         if (this.entity.animation) {
             this.currentAnim = this.idleAnim;
@@ -53,11 +60,8 @@ class PlayerMovement extends pc.ScriptType {
         }
 
         this.on('destroy', () => {
-            this.input.destroy();
+            this.input?.destroy();
         });
-
-        this.entity.collision?.on('collisionstart', this.onCollisionStart, this);
-        this.entity.collision?.on('collisionend', this.onCollisionEnd, this);
     }
 
     update(dt: number) {
@@ -156,7 +160,7 @@ class PlayerMovement extends pc.ScriptType {
             this.movement.doMove(this.direction, dt);
             this.updateAnimation(Math.abs(moveInput) > 0, moveSpeed);
 
-        } else {
+        } else if (this.controlMode === 2) {
             // ==============================================================
             // Mode 2: Free Strafe (Sumbu Dunia)
             // ==============================================================
@@ -192,6 +196,24 @@ class PlayerMovement extends pc.ScriptType {
 
             this.movement.doMove(this.direction, dt);
             this.updateAnimation(isMoving, moveSpeed);
+
+        } else if (this.controlMode === 3) {
+            // ==============================================================
+            // Mode 3: Point & Click (Raycast & MoveToward)
+            // ==============================================================
+            const clickInput = this.input as ClickInput;
+            const clickMove = this.movement as ClickMovement;
+
+            clickMove.speed = moveSpeed;
+            clickMove.turnSpeed = this.rotationSpeed;
+            clickMove.modelRotationOffset = this.modelRotationOffset || 0;
+
+            if (clickInput.hasTarget) {
+                clickMove.doMove(clickInput.targetPosition, dt);
+            }
+
+            const isMoving = clickMove.isMoving;
+            this.updateAnimation(isMoving, moveSpeed);
         }
     }
 
@@ -201,7 +223,7 @@ class PlayerMovement extends pc.ScriptType {
         // 1. Dukungan untuk Anim Component modern (Anim State Graph)
         if (this.entity.anim) {
             this.entity.anim.setBoolean('isMoving', isMoving);
-            this.entity.anim.setFloat('speed', isMoving ? currentSpeed : 0);
+            // this.entity.anim.setFloat('speed', isMoving ? currentSpeed : 0);
         }
 
         // 2. Dukungan untuk Animation Component legacy
@@ -211,30 +233,6 @@ class PlayerMovement extends pc.ScriptType {
                 this.entity.animation.play(targetAnim, 0.2);
             }
         }
-    }
-
-    onCollisionStart = function (result: pc.ContactResult) {
-        
-    };
-
-    onCollisionEnd = function (result: pc.ContactResult) {
-        
-    }; 
-
-    destroy() {
-        this.entity.collision?.off(
-            'collisionstart',
-            this.onCollisionStart,
-            this
-        );
-
-        this.entity.collision?.off(
-            'collisionend',
-            this.onCollisionEnd,
-            this
-        );
-
-        console.log('Player destroyed');
     }
 }
 
@@ -246,7 +244,8 @@ PlayerMovement.attributes.add("controlMode", {
     enum: [
         { 'Genshin Impact (Camera-Relative)': 0 },
         { 'Turn/Tank (A/D Rotasi, W/S Maju-Mundur)': 1 },
-        { 'Free Strafe (Sumbu Dunia)': 2 }
+        { 'Free Strafe (Sumbu Dunia)': 2 },
+        { 'Click to Move (Point & Click)': 3 }
     ],
     title: "Control Mode",
     description: "Pilih gaya kontrol pergerakan karakter"
